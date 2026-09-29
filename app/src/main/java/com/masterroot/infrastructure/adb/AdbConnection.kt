@@ -32,6 +32,7 @@ interface ConnectionManager {
     val activeMethod: ConnectionMethod?
     suspend fun connectUsb(): Result<DeviceInfo>
     suspend fun connectWireless(ip: String, port: Int = 5555): Result<DeviceInfo>
+    suspend fun connectLocalWireless(port: Int, pairingPort: Int, pairingCode: String): Result<DeviceInfo>
     suspend fun pairWireless(info: WirelessPairingInfo): Result<WirelessPairingResult>
     suspend fun disconnect()
     suspend fun executeCommand(command: String): ShellResult

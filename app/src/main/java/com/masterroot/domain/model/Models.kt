@@ -56,6 +56,12 @@ sealed class ConnectionMethod {
         val ipAddress: String,
         val port: Int = 5555
     ) : ConnectionMethod()
+    /** Shizuku-style: connects to the device's own Wireless Debugging port (127.0.0.1) */
+    data class LocalWirelessAdb(
+        val port: Int = 5555,
+        val pairingPort: Int = 0,
+        val pairingCode: String = ""
+    ) : ConnectionMethod()
 }
 
 sealed class ConnectionStatus {

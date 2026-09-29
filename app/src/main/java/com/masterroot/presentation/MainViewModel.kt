@@ -76,6 +76,16 @@ class MainViewModel @Inject constructor(
         }
     }
 
+    /** Shizuku-style: connect to the device's own Wireless Debugging port (127.0.0.1) */
+    fun connectLocalWireless(port: Int, pairingPort: Int, pairingCode: String) {
+        viewModelScope.launch {
+            val result = connectionManager.connectLocalWireless(port, pairingPort, pairingCode)
+            result.getOrNull()?.let { device ->
+                rootWorkflow.onDeviceConnected(device)
+            }
+        }
+    }
+
     fun disconnect() {
         viewModelScope.launch { connectionManager.disconnect() }
     }

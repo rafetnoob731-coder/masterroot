@@ -144,6 +144,7 @@ private fun ConnectionCard(
                         when (status.method) {
                             is ConnectionMethod.UsbAdb -> "USB ADB"
                             is ConnectionMethod.WirelessAdb -> "WIRELESS ADB"
+                            is ConnectionMethod.LocalWirelessAdb -> "LOCAL WIRELESS (SHIZUKU)"
                         },
                         style = MasterRootType.Body
                     )

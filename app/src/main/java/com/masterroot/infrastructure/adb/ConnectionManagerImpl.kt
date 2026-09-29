@@ -177,16 +177,81 @@ class ConnectionManagerImpl @Inject constructor(
         }
     }
 
+    // ─── Local Wireless ADB (Shizuku-style) ───────────────────────────────────
+
+    override suspend fun connectLocalWireless(port: Int, pairingPort: Int, pairingCode: String): Result<DeviceInfo> =
+        withContext(Dispatchers.IO) {
+            _connectionStatus.value = ConnectionStatus.Connecting
+            Timber.i("Shizuku-style Local Wireless ADB: pair 127.0.0.1:$pairingPort -> connect 127.0.0.1:$port")
+
+            try {
+                // Step 1: Pair with the device's own Wireless Debugging service (localhost)
+                if (pairingPort > 0 && pairingCode.isNotBlank()) {
+                    val pairResult = executeAdbCommand("adb", "pair", "127.0.0.1:$pairingPort", pairingCode)
+                    val pairOutput = pairResult.stdout + pairResult.stderr
+                    if (!pairOutput.contains("Successfully paired") && !pairOutput.contains("paired")) {
+                        val error = AdbError.NotAuthorized("Pairing failed: ${pairOutput.trim()}")
+                        _connectionStatus.value = ConnectionStatus.Error(error)
+                        return@withContext Result.failure(Exception("Pairing failed: ${pairOutput.trim()}"))
+                    }
+                    Timber.i("Local wireless pairing successful")
+                }
+
+                // Step 2: Connect to the wireless debug port on localhost
+                val connectResult = executeAdbCommand("adb", "connect", "127.0.0.1:$port")
+                val connectOutput = connectResult.stdout.trim()
+
+                when {
+                    connectOutput.contains("connected to") || connectOutput.contains("already connected") -> {
+                        // Step 3: Fetch device info via the local connection
+                        val deviceInfoResult = deviceInfoParser.parseDeviceInfo(
+                            shellExecutor = { cmd -> executeAdbShell(cmd, serial = "127.0.0.1:$port") }
+                        )
+                        if (deviceInfoResult.isFailure) {
+                            disconnect()
+                            return@withContext Result.failure(
+                                deviceInfoResult.exceptionOrNull() ?: Exception("Unknown error")
+                            )
+                        }
+                        val deviceInfo = deviceInfoResult.getOrThrow()
+                        val method = ConnectionMethod.LocalWirelessAdb(port, pairingPort, pairingCode)
+                        activeMethod = method
+                        _connectionStatus.value = ConnectionStatus.Connected(method, deviceInfo)
+                        startConnectionMonitor()
+                        Timber.i("Local Wireless ADB connected: ${deviceInfo.manufacturer} ${deviceInfo.model}")
+                        Result.success(deviceInfo)
+                    }
+                    connectOutput.contains("refused") -> {
+                        _connectionStatus.value = ConnectionStatus.Error(AdbError.ConnectionRefused)
+                        Result.failure(Exception("Connection refused — ensure Wireless Debugging is enabled"))
+                    }
+                    else -> {
+                        val error = AdbError.Unknown("Unexpected response: $connectOutput")
+                        _connectionStatus.value = ConnectionStatus.Error(error)
+                        Result.failure(Exception("Connection failed: $connectOutput"))
+                    }
+                }
+            } catch (e: Exception) {
+                Timber.e(e, "Local Wireless ADB failed")
+                _connectionStatus.value = ConnectionStatus.Error(AdbError.Unknown(e.message ?: "Unknown"))
+                Result.failure(e)
+            }
+        }
+
     // ─── Shared ───────────────────────────────────────────────────────────────
 
     override suspend fun disconnect() {
         monitorJob?.cancel()
         monitorJob = null
         val method = activeMethod
-        if (method is ConnectionMethod.WirelessAdb) {
-            try {
-                executeAdbCommand("adb", "disconnect", "${method.ipAddress}:${method.port}")
-            } catch (_: Exception) {}
+        when (method) {
+            is ConnectionMethod.WirelessAdb -> {
+                try { executeAdbCommand("adb", "disconnect", "${method.ipAddress}:${method.port}") } catch (_: Exception) {}
+            }
+            is ConnectionMethod.LocalWirelessAdb -> {
+                try { executeAdbCommand("adb", "disconnect", "127.0.0.1:${method.port}") } catch (_: Exception) {}
+            }
+            else -> {}
         }
         activeMethod = null
         _connectionStatus.value = ConnectionStatus.Disconnected
@@ -197,6 +262,7 @@ class ConnectionManagerImpl @Inject constructor(
         val method = activeMethod
         return when (method) {
             is ConnectionMethod.WirelessAdb -> executeAdbShell(command, "${method.ipAddress}:${method.port}")
+            is ConnectionMethod.LocalWirelessAdb -> executeAdbShell(command, "127.0.0.1:${method.port}")
             else -> executeAdbShell(command)
         }
     }
