@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Explicitly exclude sensitive files from backup -->
+<full-backup-content>
+    <exclude domain="file" path="backups/" />
+    <exclude domain="sharedpref" path="masterroot_premium.xml" />
+    <exclude domain="cache" path="." />
+</full-backup-content>

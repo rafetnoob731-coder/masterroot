@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <cache-path name="magisk_work" path="magisk_work/" />
+    <cache-path name="patched_images" path="." />
+    <files-path name="backups" path="backups/" />
+    <external-files-path name="logs" path="." />
+</paths>
